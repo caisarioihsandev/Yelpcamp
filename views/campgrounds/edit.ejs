@@ -28,7 +28,7 @@
             </div>
             <div class="mb-3">
                 <label class="form-label" for="description">Description</label>
-                <textarea class="form-control" type="text" id="description" name="campground[description]" required><%= campground.location %></textarea>
+                <textarea class="form-control" type="text" id="description" name="campground[description]" required><%= campground.description%></textarea>
                 <div class="valid-feedback">Looks good!</div>
             </div>
             <div class="mb-3">
@@ -38,25 +38,3 @@
         <a href="/campgrounds">All Campgrounds</a>
     </div>
 </div>
-
-<script>
-    // Example starter JavaScript for disabling form submissions if there are invalid fields
-    (() => {
-    'use strict'
-
-    // Fetch all the forms we want to apply custom Bootstrap validation styles to
-    const forms = document.querySelectorAll('.validated-form')
-
-    // Loop over them and prevent submission
-    Array.from(forms).forEach(form => {
-        form.addEventListener('submit', event => {
-        if (!form.checkValidity()) {
-            event.preventDefault()
-            event.stopPropagation()
-        }
-
-        form.classList.add('was-validated')
-        }, false)
-    })
-    })()
-</script>
