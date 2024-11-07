@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const catchAsync = require('../utils/catchAsync');
 const ExpressError = require('../utils/ExpressError');
+const { isLoggedIn } = require('../middleware');
 
 // To access/load database
 const db = require('../models/db_config');
@@ -53,13 +54,14 @@ router.get(
 );
 
 // Add New Campground page
-router.get('/new', (req, res) => {
+router.get('/new', isLoggedIn, (req, res) => {
   res.render('campgrounds/new');
 });
 
 // To insert new campground
 router.post(
   '/',
+  isLoggedIn,
   validateCampground,
   catchAsync(async (req, res, next) => {
     sql = `INSERT INTO campgrounds (title, location, image, price, description)
@@ -124,6 +126,7 @@ router.get(
 // Edit form
 router.get(
   '/:id/edit',
+  isLoggedIn,
   catchAsync(async (req, res) => {
     const campId = req.params.id;
     sql = `SELECT * FROM campgrounds WHERE id=?`;
@@ -149,6 +152,7 @@ router.get(
 // edit campground
 router.put(
   '/:id',
+  isLoggedIn,
   validateCampground,
   catchAsync(async (req, res) => {
     const campId = req.params.id;
@@ -184,6 +188,7 @@ router.put(
 // delete campground
 router.delete(
   '/:id',
+  isLoggedIn,
   catchAsync(async (req, res) => {
     const campId = req.params.id;
 
