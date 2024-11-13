@@ -2,39 +2,25 @@ const express = require('express');
 const router = express.Router({ mergeParams: true });
 const catchAsync = require('../utils/catchAsync');
 const ExpressError = require('../utils/ExpressError');
+const { validateReview, isLoggedIn, isReviewAuthor } = require('../middleware');
 
 // To access/load database
 const db = require('../models/db_config');
 let sql;
 
-const validateReview = (req, res, next) => {
-  if (!req.body.review) throw new ExpressError('Invalid Campground Data', 400);
-
-  const { rating, body } = req.body.review;
-  const ratingNumber = Number(rating);
-
-  if (!ratingNumber) {
-    throw new ExpressError('Invalid Campground Data', 400);
-  } else if (ratingNumber < 0) {
-    throw new ExpressError('Price must be greater than or equal to 0', 400);
-  } else if (!body) {
-    throw new ExpressError('Review text must be required', 400);
-  } else {
-    next();
-  }
-};
-
 router.post(
   '/',
+  isLoggedIn,
   validateReview,
   catchAsync(async (req, res) => {
     const campId = req.params.id;
+    const author = req.user.id;
     const { rating, body } = req.body.review;
     const ratingNumber = Number(rating);
 
-    sql = `INSERT INTO reviews (body, rating, camp_id) VALUES  (?, ?, ?)`;
+    sql = `INSERT INTO reviews (body, rating, camp_id, author) VALUES  (?, ?, ?, ?)`;
     const addedReview = await new Promise((resolve, reject) => {
-      db.run(sql, [body, ratingNumber, campId], function (err) {
+      db.run(sql, [body, ratingNumber, campId, author], function (err) {
         if (err) {
           return reject(err);
         }
@@ -50,6 +36,8 @@ router.post(
 
 router.delete(
   '/:reviewId',
+  isLoggedIn,
+  isReviewAuthor,
   catchAsync(async (req, res) => {
     const { id: campId, reviewId } = req.params;
     sql = `DELETE FROM reviews WHERE id = ?`;
