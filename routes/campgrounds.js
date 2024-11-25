@@ -1,215 +1,23 @@
 const express = require('express');
 const router = express.Router();
-const catchAsync = require('../utils/catchAsync');
 const { isLoggedIn, isAuthor, validateCampground } = require('../middleware');
+const { campgrounds } = require('../controllers/campgrounds');
 
-// To access/load database
-const db = require('../models/db_config');
-let sql;
-
-router.get(
-  '/',
-  catchAsync(async (req, res) => {
-    // Show all campgrounds data from database
-    sql = `SELECT * FROM campgrounds;`;
-    const campgrounds = await new Promise((resolve, reject) => {
-      db.all(sql, (err, rows) => {
-        if (err) {
-          return reject(err);
-        }
-        if (rows.length === 0) {
-          console.log('There is no camp!!');
-        }
-
-        resolve(rows);
-      });
-    });
-    res.render('campgrounds/index', { campgrounds });
-  })
-);
+router
+  .route('/')
+  .get(campgrounds.index) // All Campgrounds
+  .post(isLoggedIn, validateCampground, campgrounds.createCampground); // To insert new campground
 
 // Add New Campground page
-router.get('/new', isLoggedIn, (req, res) => {
-  res.render('campgrounds/new');
-});
+router.get('/new', isLoggedIn, campgrounds.renderNewForm);
 
-// To insert new campground
-router.post(
-  '/',
-  isLoggedIn,
-  validateCampground,
-  catchAsync(async (req, res, next) => {
-    sql = `INSERT INTO campgrounds (title, location, image, price, description, author)
-        VALUES (?, ?, ?, ?, ?, ?)`;
-    const { title, location, image, price, description } = req.body.campground;
-    const priceNumber = Number(price);
-    const author = req.user.id;
-
-    const addedCampground = await new Promise((resolve, reject) => {
-      db.run(
-        sql,
-        [title, location, image, priceNumber, description, author],
-        function (err) {
-          if (err) {
-            return reject(err);
-          }
-          // to grab the id of insertion data
-          resolve({ id: this.lastID });
-        }
-      );
-    });
-
-    req.flash('success', 'Succesfully made a new campground!');
-    res.redirect(`/campgrounds/${addedCampground.id}`);
-  })
-);
-
-// For single campground page
-router.get(
-  '/:id',
-  catchAsync(async (req, res) => {
-    const campId = req.params.id;
-    sql = `SELECT campgrounds.*, users.username, users.email FROM campgrounds 
-      INNER JOIN users ON users.id = campgrounds.author
-      WHERE campgrounds.id = ?`;
-
-    const campground = await new Promise((resolve, reject) => {
-      db.get(sql, [campId], (err, rows) => {
-        if (err) {
-          return reject(err);
-        }
-        resolve(rows);
-      });
-    });
-
-    sql = `SELECT reviews.*, users.username, users.email FROM reviews 
-      INNER JOIN users ON users.id = reviews.author WHERE reviews.camp_id = ?`;
-    const reviews = await new Promise((resolve, reject) => {
-      db.all(sql, [campId], (err, rows) => {
-        if (err) {
-          return reject(err);
-        }
-        resolve(rows);
-      });
-    });
-
-    if (!campground) {
-      req.flash('error', 'Cannot find that campground!');
-      res.redirect('/campgrounds');
-    } else {
-      res.render('campgrounds/show', { campground, reviews });
-    }
-  })
-);
+router
+  .route('/:id')
+  .get(campgrounds.showCampground)
+  .put(isLoggedIn, isAuthor, validateCampground, campgrounds.updateCampground)
+  .delete(isLoggedIn, isAuthor, campgrounds.deleteCampground);
 
 // Edit form
-router.get(
-  '/:id/edit',
-  isLoggedIn,
-  isAuthor,
-  catchAsync(async (req, res) => {
-    const campId = req.params.id;
-    sql = `SELECT * FROM campgrounds WHERE id = ?`;
-    const campground = await new Promise((resolve, reject) => {
-      db.get(sql, [campId], (err, rows) => {
-        if (err) {
-          return reject(err);
-        }
-        resolve(rows);
-      });
-    });
-
-    res.render('campgrounds/edit', { campground });
-  })
-);
-
-// edit campground
-router.put(
-  '/:id',
-  isLoggedIn,
-  isAuthor,
-  validateCampground,
-  catchAsync(async (req, res) => {
-    const campId = req.params.id;
-    const author = req.user.id;
-    const { title, location, image, price, description } = req.body.campground;
-    const priceNumber = Number(price);
-
-    sql = `UPDATE campgrounds SET title = ?, location = ?, image = ?, price = ?, description = ? 
-          WHERE id = ? AND author = ?`;
-
-    const editedCampground = await new Promise((resolve, reject) => {
-      db.run(
-        sql,
-        [title, location, image, priceNumber, description, campId, author],
-        function (err) {
-          if (err) {
-            return reject(err);
-          }
-
-          resolve({ changes: this.changes });
-        }
-      );
-    });
-
-    req.flash('success', 'Succesfully updated campground!');
-    res.redirect(`/campgrounds/${campId}`);
-  })
-);
-
-// delete campground
-router.delete(
-  '/:id',
-  isLoggedIn,
-  isAuthor,
-  catchAsync(async (req, res) => {
-    const campId = req.params.id;
-
-    sql = `SELECT * FROM reviews WHERE camp_id = ?`;
-    const reviews = await new Promise((resolve, reject) => {
-      db.all(sql, [campId], (err, rows) => {
-        if (err) {
-          return reject(err);
-        }
-        resolve(rows);
-      });
-    });
-
-    if (reviews) {
-      reviews.forEach(async (review) => {
-        sql = `DELETE FROM reviews WHERE id = ?`;
-        const deletedReview = await new Promise((resolve, reject) => {
-          db.run(sql, [review.id], function (err) {
-            if (err) {
-              return reject(err);
-            }
-
-            resolve({ changes: this.changes });
-          });
-        });
-      });
-    }
-
-    const author = req.user.id;
-    sql = `DELETE FROM campgrounds WHERE id = ? AND author = ?`;
-
-    const deletedCampground = await new Promise((resolve, reject) => {
-      db.run(sql, [campId, author], function (err) {
-        if (err) {
-          return reject(err);
-        }
-
-        resolve({ changes: this.changes });
-      });
-    });
-
-    if (deletedCampground.changes === 0) {
-      return res.status(404).send('Campground not found');
-    }
-
-    req.flash('success', 'Succesfully deleted a campground!');
-    res.redirect('/campgrounds');
-  })
-);
+router.get('/:id/edit', isLoggedIn, isAuthor, campgrounds.renderEditForm);
 
 module.exports = router;
