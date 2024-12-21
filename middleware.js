@@ -35,8 +35,6 @@ const validateCampground = (req, res, next) => {
     throw new ExpressError('Title must be required', 400);
   } else if (!location) {
     throw new ExpressError('Location must be required', 400);
-  } else if (!image) {
-    throw new ExpressError('Image must be required', 400);
   } else if (!description) {
     throw new ExpressError('Description must be required', 400);
   } else {

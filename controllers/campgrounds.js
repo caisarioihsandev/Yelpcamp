@@ -1,8 +1,8 @@
 const catchAsync = require('../utils/catchAsync');
+const { cloudinary } = require('../cloudinary');
 
 // To access/load database
 const db = require('../models/db_config');
-const { render } = require('ejs');
 let sql;
 
 const campgrounds = {
@@ -29,16 +29,16 @@ const campgrounds = {
   },
 
   createCampground: catchAsync(async (req, res, next) => {
-    sql = `INSERT INTO campgrounds (title, location, image, price, description, author)
-        VALUES (?, ?, ?, ?, ?, ?)`;
-    const { title, location, image, price, description } = req.body.campground;
+    sql = `INSERT INTO campgrounds (title, location, price, description, author)
+        VALUES (?, ?, ?, ?, ?)`;
+    const { title, location, price, description } = req.body.campground;
     const priceNumber = Number(price);
     const author = req.user.id;
 
     const addedCampground = await new Promise((resolve, reject) => {
       db.run(
         sql,
-        [title, location, image, priceNumber, description, author],
+        [title, location, priceNumber, description, author],
         function (err) {
           if (err) {
             return reject(err);
@@ -47,6 +47,24 @@ const campgrounds = {
           resolve({ id: this.lastID });
         }
       );
+    });
+
+    sql = `INSERT INTO images (name, path, campid) VALUES (?, ?, ?)`;
+    const images = req.files;
+
+    images.forEach(async (image) => {
+      await new Promise((resolve, reject) => {
+        db.run(
+          sql,
+          [image.filename, image.path, addedCampground.id],
+          function (err) {
+            if (err) {
+              return reject(err);
+            }
+            resolve();
+          }
+        );
+      });
     });
 
     req.flash('success', 'Succesfully made a new campground!');
@@ -61,6 +79,16 @@ const campgrounds = {
 
     const campground = await new Promise((resolve, reject) => {
       db.get(sql, [campId], (err, rows) => {
+        if (err) {
+          return reject(err);
+        }
+        resolve(rows);
+      });
+    });
+
+    sql = `SELECT * FROM images WHERE campid = ?`;
+    const images = await new Promise((resolve, reject) => {
+      db.all(sql, [campId], (err, rows) => {
         if (err) {
           return reject(err);
         }
@@ -83,7 +111,7 @@ const campgrounds = {
       req.flash('error', 'Cannot find that campground!');
       res.redirect('/campgrounds');
     } else {
-      res.render('campgrounds/show', { campground, reviews });
+      res.render('campgrounds/show', { campground, images, reviews });
     }
   }),
 
@@ -99,22 +127,32 @@ const campgrounds = {
       });
     });
 
-    res.render('campgrounds/edit', { campground });
+    sql = `SELECT * FROM images WHERE campid = ?`;
+    const images = await new Promise((resolve, reject) => {
+      db.all(sql, [campId], (err, rows) => {
+        if (err) {
+          return reject(err);
+        }
+        resolve(rows);
+      });
+    });
+
+    res.render('campgrounds/edit', { campground, images });
   }),
 
   updateCampground: catchAsync(async (req, res) => {
     const campId = req.params.id;
     const author = req.user.id;
-    const { title, location, image, price, description } = req.body.campground;
+    const { title, location, price, description } = req.body.campground;
     const priceNumber = Number(price);
 
-    sql = `UPDATE campgrounds SET title = ?, location = ?, image = ?, price = ?, description = ? 
+    sql = `UPDATE campgrounds SET title = ?, location = ?, price = ?, description = ? 
           WHERE id = ? AND author = ?`;
 
-    const editedCampground = await new Promise((resolve, reject) => {
+    await new Promise((resolve, reject) => {
       db.run(
         sql,
-        [title, location, image, priceNumber, description, campId, author],
+        [title, location, priceNumber, description, campId, author],
         function (err) {
           if (err) {
             return reject(err);
@@ -124,6 +162,40 @@ const campgrounds = {
         }
       );
     });
+
+    sql = `INSERT INTO images (name, path, campid) VALUES (?, ?, ?)`;
+    const images = req.files;
+
+    images.forEach(async (image) => {
+      await new Promise((resolve, reject) => {
+        db.run(sql, [image.filename, image.path, campId], function (err) {
+          if (err) {
+            return reject(err);
+          }
+          resolve();
+        });
+      });
+    });
+
+    if (req.body.deleteImages) {
+      const imgs = req.body.deleteImages;
+      for (const filename of req.body.deleteImages) {
+        // Step 1: delete from hosting (cloudinary)
+        await cloudinary.uploader.destroy(filename);
+
+        // Step 2: delete from database
+        sql = `DELETE FROM images WHERE name = ?`;
+        await new Promise((resolve, reject) => {
+          db.run(sql, [filename], function (err) {
+            if (err) {
+              return reject(err);
+            }
+
+            resolve({ changes: this.changes });
+          });
+        });
+      }
+    }
 
     req.flash('success', 'Succesfully updated campground!');
     res.redirect(`/campgrounds/${campId}`);
