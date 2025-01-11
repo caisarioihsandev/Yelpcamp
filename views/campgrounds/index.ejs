@@ -1,12 +1,13 @@
 <% layout('layouts/boilerplate') %>
-<h1>All Campgrounds</h1>
+<div id="map" style="width: 100%; height: 500px;"></div>
+<h1>All Campgrounds</h1> 
 <a href="/campgrounds/new">Add Campground</a>
 <ul>
   <% for (let campground of campgrounds) { %>
   <div class="card mb-3">
     <div class="row">
       <div class="col-md-4">
-        <img class="img-fluid" src="<%= campground.image %>" alt="">
+        <img class="img-fluid" src="<%= campground.image_url %>" alt="">
       </div>
       <div class="col-md-8">
         <div class="card-body">
@@ -24,3 +25,37 @@
   </div>
   <% } %>
 </ul>
+
+<script>
+  const mapToken = '<%-process.env.MAPBOX_TOKEN%>'
+  
+  // Query SQLite data and convert it to GeoJSON format
+  function convertSQLiteToGeoJSON(data) {
+    const features = data.map(row => ({
+      type: "Feature",
+      geometry: {
+        type: "Point",
+        coordinates: [row.longitude, row.latitude], // Longitude first, latitude second
+      },
+      properties: {
+        campid: row.campid, // Add any additional properties you want to include
+        title: row.title,
+        location: row.location
+      },
+    }));
+
+    return {
+      type: "FeatureCollection",
+      features,
+    };
+  }
+
+  // Example SQLite data (replace this with actual data from your SQLite query)
+  const sqliteData = <%- JSON.stringify(geo)%>  
+
+  // Convert SQLite data to GeoJSON
+  const geojsonData = convertSQLiteToGeoJSON(sqliteData);
+  const camps = <%- JSON.stringify(campgrounds) %>;
+</script>
+
+<script src="/javascripts/clusterMap.js"></script>
